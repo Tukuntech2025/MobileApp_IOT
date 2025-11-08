@@ -8,10 +8,10 @@ class BottomBar extends StatelessWidget {
   void _navigate(BuildContext context, int index) {
     if (index == currentIndex) return;
 
-    // Rutas de las pestañas en el mismo orden que los iconos
+    
     const tabs = ['/home', '/vitals', '/history', '/profile'];
 
-    // Reemplaza la ruta actual para que "atrás" no acumule pantallas
+    
     Navigator.of(context).pushReplacementNamed(tabs[index]);
   }
 
@@ -20,7 +20,7 @@ class BottomBar extends StatelessWidget {
     const activeBackground = Color(0xFF3A3A3A);
 
     return Container(
-      color: Colors.black, // 👈 negro puro
+      color: Colors.black, 
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
