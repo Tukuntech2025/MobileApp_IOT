@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:tukuntech/services/auth_service.dart';
 
 class ToggleSidebar extends StatelessWidget {
   const ToggleSidebar({super.key});
@@ -18,7 +19,7 @@ class ToggleSidebar extends StatelessWidget {
         height: 28,
         color: const Color(0xFFF0E8D5),
       ),
-      onSelected: (value) {
+      onSelected: (value) async {
         switch (value) {
           case 0: // Subscription
             Navigator.of(context).pushNamed('/subscription');
@@ -27,8 +28,7 @@ class ToggleSidebar extends StatelessWidget {
             Navigator.of(context).pushNamed('/support');
             break;
           case 2: // Log out
-            Navigator.of(context)
-                .pushNamedAndRemoveUntil('/login', (route) => false);
+            await _logout(context);
             break;
         }
       },
@@ -38,6 +38,23 @@ class ToggleSidebar extends StatelessWidget {
         _buildMenuItem("assets/logout.png", "Log out", 2),
       ],
     );
+  }
+
+ 
+  Future<void> _logout(BuildContext context) async {
+    final AuthService authService = AuthService();
+    
+    print(' Logging out...');
+    
+    
+    await authService.removeToken();
+    
+    print(' Logged out successfully');
+    
+    
+    if (context.mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
   }
 
   PopupMenuItem<int> _buildMenuItem(String iconPath, String text, int value) {
