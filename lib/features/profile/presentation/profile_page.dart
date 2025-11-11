@@ -25,8 +25,6 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _isLoading = true);
     try {
       final profile = await _profileService.getMyProfile();
-      print('🟢 Profile loaded: $profile');
-
       if (mounted) {
         setState(() {
           _profileData = profile;
@@ -46,11 +44,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final profileType = _profileData?['profileType']?.toString() ?? 'PATIENT';
-
     return BaseScreen(
       currentIndex: 3,
-      title: profileType == 'PATIENT' ? 'Patient' : 'Attendant',
+      title: _profileData?['profileType'] == 'PATIENT' ? 'Patient' : 'Attendant',
       child: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFFF0E8D5)),
@@ -85,59 +81,30 @@ class _ProfilePageState extends State<ProfilePage> {
                         color: const Color(0xFFD1AA10),
                       ),
                       const SizedBox(height: 10),
-                      _buildUserRow(
-                        "Name",
-                        _profileData?['firstName']?.toString() ?? 'N/A',
-                      ),
+                      _buildUserRow("Name", _profileData?['firstName'] ?? 'N/A'),
                       _divider(),
-                      _buildUserRow(
-                        "Last Name",
-                        _profileData?['lastName']?.toString() ?? 'N/A',
-                      ),
+                      _buildUserRow("Last Name", _profileData?['lastName'] ?? 'N/A'),
                       _divider(),
-                      _buildUserRow(
-                        "DNI",
-                        _profileData?['dni']?.toString() ?? 'N/A',
-                      ),
+                      _buildUserRow("DNI", _profileData?['dni'] ?? 'N/A'),
                       _divider(),
-                      _buildUserRow(
-                        "Age",
-                        _profileData?['age']?.toString() ?? 'N/A',
-                      ),
+                      _buildUserRow("Age", _profileData?['age']?.toString() ?? 'N/A'),
                       _divider(),
-                      _buildUserRow(
-                        "Gender",
-                        _formatValue(_profileData?['gender']?.toString()),
-                      ),
+                      _buildUserRow("Gender", _formatValue(_profileData?['gender'])),
                       _divider(),
-
+                      
                       // Solo mostrar campos clínicos si es PATIENT
-                      if (profileType == 'PATIENT') ...[
-                        _buildUserRow(
-                          "Blood Group",
-                          _formatValue(
-                              _profileData?['bloodGroup']?.toString()),
-                        ),
+                      if (_profileData?['profileType'] == 'PATIENT') ...[
+                        _buildUserRow("Blood Group", _formatValue(_profileData?['bloodGroup'])),
                         _divider(),
-                        _buildUserRow(
-                          "Nationality",
-                          _formatValue(
-                              _profileData?['nationality']?.toString()),
-                        ),
+                        _buildUserRow("Nationality", _formatValue(_profileData?['nationality'])),
                         _divider(),
-                        _buildUserRow(
-                          "Allergies",
-                          _formatValue(
-                              _profileData?['allergy']?.toString()),
-                        ),
+                        _buildUserRow("Allergies", _formatValue(_profileData?['allergy'])),
                       ],
-
+                      
                       const Spacer(),
                       Center(
                         child: ElevatedButton(
                           onPressed: () async {
-                            if (_profileData == null) return;
-
                             final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -146,10 +113,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                               ),
                             );
-
+                            
                             // Si se actualizó, recargar
                             if (result == true) {
-                              print('🟡 Profile updated, reloading data...');
                               _loadProfile();
                             }
                           },
@@ -222,12 +188,10 @@ class _ProfilePageState extends State<ProfilePage> {
     return value
         .replaceAll('_', ' ')
         .split(' ')
-        .map((word) =>
-            word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
         .join(' ');
   }
 }
-
 
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic> profileData;
@@ -259,24 +223,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void initState() {
     super.initState();
     _isPatient = widget.profileData['profileType'] == 'PATIENT';
-
-    _firstNameController = TextEditingController(
-      text: widget.profileData['firstName']?.toString() ?? '',
-    );
-    _lastNameController = TextEditingController(
-      text: widget.profileData['lastName']?.toString() ?? '',
-    );
-    _dniController = TextEditingController(
-      text: widget.profileData['dni']?.toString() ?? '',
-    );
-    _ageController = TextEditingController(
-      text: widget.profileData['age']?.toString() ?? '',
-    );
-
-    _selectedGender = widget.profileData['gender']?.toString();
-    _selectedBloodGroup = widget.profileData['bloodGroup']?.toString();
-    _selectedNationality = widget.profileData['nationality']?.toString();
-    _selectedAllergy = widget.profileData['allergy']?.toString();
+    
+    _firstNameController = TextEditingController(text: widget.profileData['firstName']);
+    _lastNameController = TextEditingController(text: widget.profileData['lastName']);
+    _dniController = TextEditingController(text: widget.profileData['dni']);
+    _ageController = TextEditingController(text: widget.profileData['age']?.toString());
+    
+    _selectedGender = widget.profileData['gender'];
+    _selectedBloodGroup = widget.profileData['bloodGroup'];
+    _selectedNationality = widget.profileData['nationality'];
+    _selectedAllergy = widget.profileData['allergy'];
   }
 
   Future<void> _updateProfile() async {
@@ -300,14 +256,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully!'),
-          ),
+          const SnackBar(content: Text('Profile updated successfully!')),
         );
-        Navigator.pop(context, true); 
+        Navigator.pop(context, true); // Devolver true para indicar que se actualizó
       }
     } catch (e) {
-      print('🔴 Error updating profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${e.toString()}')),
@@ -347,14 +300,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 _buildTextField(
                   "First Name",
                   _firstNameController,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 _buildTextField(
                   "Last Name",
                   _lastNameController,
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'Required' : null,
+                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 _buildTextField(
                   "DNI",
@@ -385,7 +336,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ['MALE', 'FEMALE', 'OTHER'],
                   (v) => setState(() => _selectedGender = v),
                 ),
-
+                
                 // Solo mostrar campos clínicos si es paciente
                 if (_isPatient) ...[
                   _buildDropdown(
@@ -435,7 +386,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     (v) => setState(() => _selectedAllergy = v),
                   ),
                 ],
-
+                
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
@@ -475,12 +426,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController controller, {
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
+  Widget _buildTextField(String label, TextEditingController controller,
+      {TextInputType keyboardType = TextInputType.text,
+      String? Function(String?)? validator}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -514,18 +462,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-  Widget _buildDropdown(
-    String label,
-    String? value,
-    List<String> items,
-    void Function(String?) onChanged,
-  ) {
+  Widget _buildDropdown(String label, String? value, List<String> items,
+      void Function(String?) onChanged) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: DropdownButtonFormField<String>(
-        value: value.isNotEmptyOrNull && items.contains(value)
-            ? value
-            : null,
+        value: value,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: GoogleFonts.josefinSans(
@@ -561,8 +503,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return value
         .replaceAll('_', ' ')
         .split(' ')
-        .map((word) =>
-            word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
         .join(' ');
   }
 
@@ -574,8 +515,4 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _ageController.dispose();
     super.dispose();
   }
-}
-
-extension _StringNullCheck on String? {
-  bool get isNotEmptyOrNull => this != null && this!.isNotEmpty;
 }
