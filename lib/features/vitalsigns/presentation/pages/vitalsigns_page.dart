@@ -5,16 +5,9 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:tukuntech/core/base_screen.dart';
 import 'package:tukuntech/services/auth_service.dart';
 import 'package:tukuntech/services/vitalsigns/monitoring_service.dart';
+import 'package:intl/intl.dart'; // 🆕 Necesario para formatear la fecha/hora
 
 // Asumiendo que VitalMeasurement es una clase que representa la medición.
-// La mantengo fuera del scope para no generar error, pero es necesaria.
-// Si no la tienes definida en este archivo, debe estar en monitoring_service.dart
-// o importada. Por simplicidad, asumo que tiene heartRate (int), oxygenLevel (int),
-// y temperature (double).
-// Si tu API retorna un objeto con datos, debes manejar el caso de que la API
-// retorne null, o que los campos dentro del objeto sean null.
-// Aquí asumiré que si _measurement es null, es porque no hubo datos o hubo error.
-
 
 class VitalSignsPage extends StatefulWidget {
   const VitalSignsPage({super.key});
@@ -32,9 +25,10 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
   final AuthService _authService = AuthService();
   final MonitoringService _monitoringService = MonitoringService();
 
-  VitalMeasurement? _measurement; // Sigue siendo nullable
+  VitalMeasurement? _measurement; 
+  // 🆕 Estado para las alertas cargadas de la API
+  List<dynamic> _apiAlerts = []; 
   bool _isLoading = true;
-  // String? _error; // ¡Eliminamos el manejo de error explícito aquí!
 
   @override
   void initState() {
@@ -57,50 +51,79 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
       });
     });
 
-    // Primera carga del API
-    _loadMeasurement();
+    // Primera carga del API (incluye mediciones y alertas)
+    _loadData();
 
-    // Actualizar signos vitales cada 5 segundos (ajusta si quieres)
+    // Actualizar signos vitales y alertas cada 5 segundos
     _apiTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _loadMeasurement();
+      _loadData();
     });
   }
-
-  Future<void> _loadMeasurement() async {
+  
+  // 🆕 Función unificada para cargar mediciones y alertas
+  Future<void> _loadData() async {
     try {
       final int? patientId = await _authService.getUserId();
+      // Usaremos el ID 21 para las alertas, como en HomePage, por consistencia.
+      const int alertsPatientId = 21; 
 
       if (patientId == null) {
         if (!mounted) return;
         setState(() {
-          // Si no hay patientId, no cargamos, pero evitamos el error.
-          // Dejamos _measurement = null (lo que resultará en 0s en el build)
           _isLoading = false;
         });
         return;
       }
 
+      // 1. Cargar las mediciones
       final measurement = await _monitoringService.getLatestMeasurement(patientId);
 
+      // 2. Cargar las alertas (usando el ID 21 fijo para la URL)
+      final List<dynamic> fetchedAlerts =
+          await _authService.getPatientAlerts(alertsPatientId);
+
       if (!mounted) return;
 
-      setState(() {
-        _measurement = measurement; // Podría ser null si la API no devuelve datos
-        _isLoading = false;
-        // _error = null; // Eliminado
+      // 3. Ordenar y limitar las alertas (3 más recientes)
+      fetchedAlerts.sort((a, b) {
+        final DateTime dateA = DateTime.parse(a['createdAt']);
+        final DateTime dateB = DateTime.parse(b['createdAt']);
+        return dateB.compareTo(dateA); 
       });
+      final List<dynamic> limitedAlerts = fetchedAlerts.take(3).toList();
+
+
+      setState(() {
+        _measurement = measurement; 
+        _apiAlerts = limitedAlerts; // 🆕 Actualiza el estado de las alertas
+        _isLoading = false;
+      });
+      
+      print('🟢 Alerts loaded: ${_apiAlerts.length}');
+
     } catch (e) {
-      print('🔴 Error loading measurement: $e');
+      print('🔴 Error loading data (measurement or alerts): $e');
       if (!mounted) return;
       setState(() {
-        // En caso de error de red/servidor, simplemente dejamos _measurement en null
-        // y eliminamos el error visible. Esto hará que se muestre 0.
-        _measurement = null;
+        _measurement = null; 
+        _apiAlerts = [ // Muestra un mensaje de error en las alertas
+          {'message': 'Error loading alerts', 'createdAt': DateTime.now().toIso8601String()}
+        ];
         _isLoading = false;
-        // _error = null; // Eliminado
       });
     }
   }
+  
+  // 🆕 Función para formatear el timestamp a hora
+  String _formatTime(String timestamp) {
+    try {
+      final DateTime dateTime = DateTime.parse(timestamp).toLocal();
+      return DateFormat('hh:mm a').format(dateTime); 
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
 
   @override
   void dispose() {
@@ -202,7 +225,13 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
     );
   }
 
-  Widget _alertCard(String text) {
+  // 🆕 Widget de tarjeta de alerta mejorado para mostrar la hora
+  Widget _alertCard(String text, {required String time}) {
+    // Busca y elimina el "Valores fuera de rango →" si existe, ya que el título de la sección es "Alerts"
+    final displayMessage = text
+        .replaceAll('Valores fuera de rango → ', '')
+        .replaceAll('Valores fuera de rango →', '');
+
     return Container(
       padding: const EdgeInsets.all(12),
       margin: const EdgeInsets.only(bottom: 8),
@@ -211,14 +240,28 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Icon(Icons.warning, color: Colors.black, size: 24),
           const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              displayMessage,
+              style: GoogleFonts.darkerGrotesque(
+                fontSize: 18,
+                color: Colors.black,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            text,
+            time,
             style: GoogleFonts.darkerGrotesque(
-              fontSize: 18,
+              fontSize: 16,
               color: Colors.black,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -226,50 +269,29 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
     );
   }
 
+  // 🆕 Función para construir la lista de alertas usando _apiAlerts
   List<Widget> _buildAlerts() {
-    final List<Widget> alerts = [];
-
-    // Si _measurement es null, simplemente mostramos "No alerts"
-    if (_measurement == null) {
-        alerts.add(
+    if (_apiAlerts.isEmpty) {
+      return [
         Text(
-          "No alerts",
+          "No recent alerts",
           style: GoogleFonts.darkerGrotesque(
             fontSize: 18,
             color: Colors.white70,
           ),
         ),
-      );
-      return alerts;
+      ];
     }
 
-    final m = _measurement!;
+    return _apiAlerts.map<Widget>((alert) {
+      final String message = alert['message'] ?? 'Unknown Alert';
+      final String timestamp = alert['createdAt'] ?? DateTime.now().toIso8601String();
+      final String time = _formatTime(timestamp);
 
-    // Reglas simples de ejemplo (ajusta según tu lógica clínica)
-    if (m.oxygenLevel < 92) {
-      alerts.add(_alertCard("Low oxygenation (${m.oxygenLevel}%)"));
-    }
-    if (m.heartRate > 120) {
-      alerts.add(_alertCard("High heart rate (${m.heartRate} bpm)"));
-    }
-    if (m.temperature > 37.5) {
-      alerts.add(_alertCard("High temperature (${m.temperature.toStringAsFixed(1)} °C)"));
-    }
-
-    if (alerts.isEmpty) {
-      alerts.add(
-        Text(
-          "No alerts",
-          style: GoogleFonts.darkerGrotesque(
-            fontSize: 18,
-            color: Colors.white70,
-          ),
-        ),
-      );
-    }
-
-    return alerts;
+      return _alertCard(message, time: time);
+    }).toList();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -284,9 +306,6 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
       child: Padding(
         padding: const EdgeInsets.all(16),
 
-        // Lógica de visualización simplificada:
-        // 1. Si está cargando, muestra el indicador.
-        // 2. Si terminó de cargar (sin error explícito), muestra los datos (que serán 0 si _measurement es null).
         child: _isLoading
             ? const Center(
                 child: CircularProgressIndicator(),
@@ -296,7 +315,6 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
                   _vitalCard(
                     bellAsset: "assets/noti2.png",
                     iconAsset: "assets/hearth.png",
-                    // Uso de la variable local 'heartRate' que es 0 si _measurement es null
                     value: heartRate.toString(), 
                     unit: "Bpm",
                     label: "Bpm",
@@ -305,7 +323,6 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
                   _vitalCard(
                     bellAsset: "assets/noti2.png",
                     iconAsset: "assets/SpO2.png",
-                    // Uso de la variable local 'oxygenLevel' que es 0 si _measurement es null
                     value: "$oxygenLevel%",
                     unit: "",
                     label: "SpO₂",
@@ -314,7 +331,6 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
                   _vitalCard(
                     bellAsset: "assets/noti1.png",
                     iconAsset: "assets/temp2.png",
-                    // Uso de la variable local 'temperature' que es 0.0 si _measurement es null
                     value: temperature.toStringAsFixed(1),
                     unit: "°C",
                     label: "Temp",
@@ -330,6 +346,7 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  // 🆕 Usa el nuevo _buildAlerts
                   ..._buildAlerts(),
                 ],
               ),
