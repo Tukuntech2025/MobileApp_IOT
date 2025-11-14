@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   final String baseUrl = 'https://tukuntech-back.onrender.com/api/v1';
 
- 
+  
   Future<void> registerUser(String email, String password, String role) async {
     final url = Uri.parse('$baseUrl/auth/register');
     final headers = {"Content-Type": "application/json"};
@@ -27,7 +27,7 @@ class AuthService {
     }
   }
 
- 
+  
   Future<void> loginUser(String email, String password) async {
     final url = Uri.parse('$baseUrl/auth/login');
     final headers = {"Content-Type": "application/json"};
@@ -47,7 +47,7 @@ class AuthService {
     if (response.statusCode == 200) {
       var data = json.decode(response.body);
       
-     
+      
       if (!data.containsKey('accessToken')) {
         print('🔴 Response does not contain accessToken');
         throw Exception('Invalid response format: missing accessToken');
@@ -66,7 +66,7 @@ class AuthService {
         print('🟢 UserId saved: $userId');
       }
       
-     
+      
       if (data.containsKey('user') && data['user'].containsKey('roles')) {
         List<String> roles = List<String>.from(data['user']['roles']);
         await _saveRoles(roles);
@@ -98,28 +98,57 @@ class AuthService {
     }
   }
 
-  // Guardar el token en SharedPreferences
+  Future<List<dynamic>> getPatientAlerts(int patientId) async {
+    final token = await getToken();
+    if (token == null) {
+      print('🔴 Error: Token not found for alerts request.');
+      throw Exception('User not logged in or token expired.');
+    }
+
+    final url = Uri.parse('$baseUrl/monitoring/patients/$patientId/alerts');
+    print('🔵 Sending alerts request to: $url');
+
+    final headers = {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer $token",
+    };
+
+    try {
+      final response = await http.get(url, headers: headers);
+      print('🔵 Alerts response status code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final String jsonString = utf8.decode(response.bodyBytes);
+        return json.decode(jsonString);
+      } else {
+        print('🔴 Failed to load alerts: ${response.body}');
+        throw Exception(
+            'Failed to load patient alerts. Status: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('🔴 Error during getPatientAlerts: $e');
+      rethrow;
+    }
+  }
+
   Future<void> _saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     print('🔵 Token stored in SharedPreferences');
   }
 
-  // 🆕 Guardar userId
   Future<void> _saveUserId(int userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('userId', userId);
     print('🔵 UserId stored in SharedPreferences');
   }
 
-  // Guardar los roles en SharedPreferences
   Future<void> _saveRoles(List<String> roles) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('roles', roles);
     print('🔵 Roles stored in SharedPreferences');
   }
 
-  // 🆕 Función para obtener userId
   Future<int?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
     int? userId = prefs.getInt('userId');
@@ -127,7 +156,6 @@ class AuthService {
     return userId;
   }
 
-  // Función para obtener el token
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('token');
@@ -135,7 +163,6 @@ class AuthService {
     return token;
   }
 
-  // Función para obtener los roles guardados
   Future<List<String>> getRoles() async {
     final prefs = await SharedPreferences.getInstance();
     List<String>? roles = prefs.getStringList('roles');
@@ -143,7 +170,6 @@ class AuthService {
     return roles ?? [];
   }
 
-  // Función para eliminar el token (logout)
   Future<void> removeToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
@@ -152,7 +178,6 @@ class AuthService {
     print('🔵 Token, roles and userId removed from storage');
   }
 
-  // Función para verificar si hay un token guardado
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     bool hasToken = prefs.containsKey('token');
