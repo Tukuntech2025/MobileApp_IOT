@@ -51,19 +51,39 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     const beige = Color(0xFFF0E8D5);
+    const primaryDark = Color(0xFF1B1B1B);
 
     return Scaffold(
       backgroundColor: beige,
       body: SafeArea(
         child: Stack(
           children: [
+            // Botón de regreso/Login en la esquina superior izquierda
+            Positioned(
+              left: 12, // Cambiado de 'right' a 'left'
+              top: 8,
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(), // Pop es suficiente para volver a la ruta anterior, si RegisterPage fue pusheada desde LoginPage
+                child: Text(
+                  // Usamos un icono o texto más claro para indicar regreso
+                  '< LOGIN', 
+                  style: GoogleFonts.josefinSans(
+                    color: primaryDark,
+                    fontSize: 12,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            
+            // Texto estático REGISTER en la esquina superior derecha
             Positioned(
               right: 12,
               top: 8,
               child: Text(
                 'REGISTER',
                 style: GoogleFonts.josefinSans(
-                  color: const Color(0xFF1B1B1B),
+                  color: primaryDark,
                   fontSize: 12,
                   letterSpacing: 1.2,
                 ),
@@ -221,7 +241,6 @@ class _DarkFieldBox extends StatelessWidget {
   final TextEditingController controller;
 
   const _DarkFieldBox({
-    super.key,
     required this.hint,
     this.icon,
     this.obscure = false,
