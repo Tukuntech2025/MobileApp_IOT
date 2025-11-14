@@ -6,6 +6,15 @@ import 'package:tukuntech/core/base_screen.dart';
 import 'package:tukuntech/services/auth_service.dart';
 import 'package:tukuntech/services/vitalsigns/monitoring_service.dart';
 
+// Asumiendo que VitalMeasurement es una clase que representa la medición.
+// La mantengo fuera del scope para no generar error, pero es necesaria.
+// Si no la tienes definida en este archivo, debe estar en monitoring_service.dart
+// o importada. Por simplicidad, asumo que tiene heartRate (int), oxygenLevel (int),
+// y temperature (double).
+// Si tu API retorna un objeto con datos, debes manejar el caso de que la API
+// retorne null, o que los campos dentro del objeto sean null.
+// Aquí asumiré que si _measurement es null, es porque no hubo datos o hubo error.
+
 
 class VitalSignsPage extends StatefulWidget {
   const VitalSignsPage({super.key});
@@ -23,9 +32,9 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
   final AuthService _authService = AuthService();
   final MonitoringService _monitoringService = MonitoringService();
 
-  VitalMeasurement? _measurement;
+  VitalMeasurement? _measurement; // Sigue siendo nullable
   bool _isLoading = true;
-  String? _error;
+  // String? _error; // ¡Eliminamos el manejo de error explícito aquí!
 
   @override
   void initState() {
@@ -62,8 +71,10 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
       final int? patientId = await _authService.getUserId();
 
       if (patientId == null) {
+        if (!mounted) return;
         setState(() {
-          _error = 'No patient id found';
+          // Si no hay patientId, no cargamos, pero evitamos el error.
+          // Dejamos _measurement = null (lo que resultará en 0s en el build)
           _isLoading = false;
         });
         return;
@@ -74,16 +85,19 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
       if (!mounted) return;
 
       setState(() {
-        _measurement = measurement;
+        _measurement = measurement; // Podría ser null si la API no devuelve datos
         _isLoading = false;
-        _error = null;
+        // _error = null; // Eliminado
       });
     } catch (e) {
       print('🔴 Error loading measurement: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Error loading vital signs';
+        // En caso de error de red/servidor, simplemente dejamos _measurement en null
+        // y eliminamos el error visible. Esto hará que se muestre 0.
+        _measurement = null;
         _isLoading = false;
+        // _error = null; // Eliminado
       });
     }
   }
@@ -215,7 +229,19 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
   List<Widget> _buildAlerts() {
     final List<Widget> alerts = [];
 
-    if (_measurement == null) return alerts;
+    // Si _measurement es null, simplemente mostramos "No alerts"
+    if (_measurement == null) {
+        alerts.add(
+        Text(
+          "No alerts",
+          style: GoogleFonts.darkerGrotesque(
+            fontSize: 18,
+            color: Colors.white70,
+          ),
+        ),
+      );
+      return alerts;
+    }
 
     final m = _measurement!;
 
@@ -246,81 +272,68 @@ class _VitalSignsPageState extends State<VitalSignsPage> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return BaseScreen(
-    title: "Vital Signs",
-    currentIndex: 1,
-    child: Padding(
-      padding: const EdgeInsets.all(16),
+  Widget build(BuildContext context) {
+    // Definimos los valores por defecto
+    final int heartRate = _measurement?.heartRate ?? 0;
+    final int oxygenLevel = _measurement?.oxygenLevel ?? 0;
+    final double temperature = _measurement?.temperature ?? 0.0;
 
-      // 👇 AQUÍ empieza lo que debes pegar
-      child: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : _error != null
-              ? Center(
-                  child: Text(
-                    _error!,
-                    style: GoogleFonts.darkerGrotesque(
-                      fontSize: 18,
-                      color: Colors.redAccent,
-                    ),
-                    textAlign: TextAlign.center,
+    return BaseScreen(
+      title: "Vital Signs",
+      currentIndex: 1,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+
+        // Lógica de visualización simplificada:
+        // 1. Si está cargando, muestra el indicador.
+        // 2. Si terminó de cargar (sin error explícito), muestra los datos (que serán 0 si _measurement es null).
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(),
+              )
+            : ListView(
+                children: [
+                  _vitalCard(
+                    bellAsset: "assets/noti2.png",
+                    iconAsset: "assets/hearth.png",
+                    // Uso de la variable local 'heartRate' que es 0 si _measurement es null
+                    value: heartRate.toString(), 
+                    unit: "Bpm",
+                    label: "Bpm",
+                    dark: false,
                   ),
-                )
-              : (_measurement == null)
-                  ? Center(
-                      child: Text(
-                        'No vital signs recorded yet for this patient.',
-                        style: GoogleFonts.darkerGrotesque(
-                          fontSize: 18,
-                          color: Colors.white70,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : ListView(
-                      children: [
-                        _vitalCard(
-                          bellAsset: "assets/noti2.png",
-                          iconAsset: "assets/hearth.png",
-                          value: _measurement!.heartRate.toString(),
-                          unit: "Bpm",
-                          label: "Bpm",
-                          dark: false,
-                        ),
-                        _vitalCard(
-                          bellAsset: "assets/noti2.png",
-                          iconAsset: "assets/SpO2.png",
-                          value: "${_measurement!.oxygenLevel}%",
-                          unit: "",
-                          label: "SpO₂",
-                          dark: false,
-                        ),
-                        _vitalCard(
-                          bellAsset: "assets/noti1.png",
-                          iconAsset: "assets/temp2.png",
-                          value: _measurement!.temperature.toStringAsFixed(1),
-                          unit: "°C",
-                          label: "Temp",
-                          dark: true,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Alerts",
-                          style: GoogleFonts.darkerGrotesque(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ..._buildAlerts(),
-                      ],
+                  _vitalCard(
+                    bellAsset: "assets/noti2.png",
+                    iconAsset: "assets/SpO2.png",
+                    // Uso de la variable local 'oxygenLevel' que es 0 si _measurement es null
+                    value: "$oxygenLevel%",
+                    unit: "",
+                    label: "SpO₂",
+                    dark: false,
+                  ),
+                  _vitalCard(
+                    bellAsset: "assets/noti1.png",
+                    iconAsset: "assets/temp2.png",
+                    // Uso de la variable local 'temperature' que es 0.0 si _measurement es null
+                    value: temperature.toStringAsFixed(1),
+                    unit: "°C",
+                    label: "Temp",
+                    dark: true,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Alerts",
+                    style: GoogleFonts.darkerGrotesque(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-    ),
-  );
-
+                  ),
+                  const SizedBox(height: 8),
+                  ..._buildAlerts(),
+                ],
+              ),
+      ),
+    );
   }
 }
